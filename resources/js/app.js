@@ -6,6 +6,7 @@
 
 require('./bootstrap');
 require('./sb-admin');
+import './helpers/helper';
 window.Vue = require('vue');
 
 /**
@@ -20,6 +21,8 @@ window.Vue = require('vue');
 // files.keys().map(key => Vue.component(key.split('/').pop().split('.')[0], files(key).default))
 
 Vue.component('create-product', require('./components/CreateProduct.vue').default);
+
+
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to

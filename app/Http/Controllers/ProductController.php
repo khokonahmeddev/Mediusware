@@ -3,8 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
-use App\Models\ProductVariant;
-use App\Models\ProductVariantPrice;
+use App\Models\ProductImage;
 use App\Models\Variant;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,8 +11,8 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    protected $variant;
-    
+    protected $product;
+
     public function index()
     {
         $products = Product::with('productVariants', 'productVariantPrice')
@@ -55,32 +54,22 @@ class ProductController extends Controller
             'title' => 'required|unique:products,title|max:255',
             'sku' => 'required|unique:products,sku|max:255',
         ]);
+        $this->product = Product::create($request->only('title', 'sku', 'description'));
 
-        $product = Product::create($request->only('title', 'sku', 'description'));
-        if ($request->product_variant) {
-            foreach ($request->product_variant as $key => $items) {
-                foreach ($items['tags'] as $tag) {
-                    $this->variant = $product->productVariants()->updateOrCreate([
-                        'variant' => $tag,
-                        'variant_id' => $items['option'],
-                    ]);
-                }
-
-                foreach ($request->product_variant_prices as $item) {
-                    $product->productVariantPrice()->updateOrCreate([
-                        'product_variant_one' => $this->variant->id,
-                        'product_variant_two' => $this->variant->id,
-                        'product_variant_three' => $this->variant->id,
-                        'price' => $item['price'],
-                        'stock' => $item['stock'],
-                    ]);
-                }
-
-            }
-
+        if ($request->hasfile('product_image')) {
+            $this->uploadImage($request->file('product_image'));
 
         }
-        return redirect()->back()->with('message', 'Product created successfully');
+        if ($request->product_variant) {
+            $this->productVariant($request->product_variant);
+        }
+
+        if ($request->product_variant_prices) {
+            $this->productVariantPrice($request->product_variant_prices);
+        }
+
+
+        return "Product created successfully";
 
     }
 
@@ -123,5 +112,50 @@ class ProductController extends Controller
     public function destroy(Product $product)
     {
         //
+    }
+
+    public function uploadImage($request)
+    {
+        foreach ($request as $image) {
+            $extension = uniqid() . '.' . $image->getClientOriginalExtension();
+            $filePath = 'images/';
+            $image->move(public_path($filePath), $extension);
+            $imagePath = $filePath . $extension;
+            $this->product->images()->updateOrCreate([
+                'file_path' => $imagePath
+            ]);
+        }
+    }
+
+    public function productVariant($request)
+    {
+        foreach ($request as $items) {
+            $tags = explode(",", $items['tags']);
+            foreach ($tags as $tag) {
+                $this->product->productVariants()->updateOrCreate([
+                    'variant' => $tag,
+                    'variant_id' => $items['option'],
+                ]);
+            }
+        }
+    }
+
+    public function productVariantPrice($request)
+    {
+        $variants = $this->product->load('productVariants')->productVariants->pluck('id', 'variant');
+        foreach ($request as $item) {
+            $titles = explode('/', $item['title']);
+            $productVariants = [];
+            foreach (['one', 'two', 'three'] as $k => $value) {
+                $id = isset($titles[$k]) ? $titles[$k] : null;
+                if ($id) {
+                    $productVariants["product_variant_$value"] = $variants[$id];
+                }
+            }
+            $this->product->productVariantPrice()->updateOrCreate(array_merge($productVariants, [
+                'price' => $item['price'],
+                'stock' => $item['stock'],
+            ]));
+        }
     }
 }

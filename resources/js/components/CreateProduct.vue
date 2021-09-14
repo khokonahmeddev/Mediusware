@@ -49,16 +49,19 @@
                             </div>
                             <div class="col-md-8">
                                 <div class="form-group">
-                                    <label v-if="product_variant.length != 1" @click="product_variant.splice(index,1); checkVariant"
+                                    <label v-if="product_variant.length != 1"
+                                           @click="product_variant.splice(index,1); checkVariant"
                                            class="float-right text-primary"
                                            style="cursor: pointer;">Remove</label>
                                     <label v-else for="">.</label>
-                                    <input-tag v-model="item.tags" @input="checkVariant" class="form-control"></input-tag>
+                                    <input-tag v-model="item.tags" @input="checkVariant"
+                                               class="form-control"></input-tag>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="card-footer" v-if="product_variant.length < variants.length && product_variant.length < 3">
+                    <div class="card-footer"
+                         v-if="product_variant.length < variants.length && product_variant.length < 3">
                         <button @click="newVariant" class="btn btn-primary">Add another option</button>
                     </div>
 
@@ -100,6 +103,7 @@
 import vue2Dropzone from 'vue2-dropzone'
 import 'vue2-dropzone/dist/vue2Dropzone.min.css'
 import InputTag from 'vue-input-tag'
+import {formDataAssigner} from "../helpers/helper";
 
 export default {
     components: {
@@ -128,6 +132,7 @@ export default {
             dropzoneOptions: {
                 url: 'https://httpbin.org/post',
                 thumbnailWidth: 150,
+                autoProcessQueue: false,
                 maxFilesize: 0.5,
                 headers: {"My-Awesome-Header": "header value"}
             }
@@ -183,13 +188,18 @@ export default {
                 title: this.product_name,
                 sku: this.product_sku,
                 description: this.description,
-                product_image: this.images,
                 product_variant: this.product_variant,
                 product_variant_prices: this.product_variant_prices
             }
 
+            let formData = formDataAssigner(new FormData, product);
 
-            axios.post('/product', product).then(response => {
+            if (this.$refs.myVueDropzone.getQueuedFiles().length)
+                this.$refs.myVueDropzone.getQueuedFiles().forEach(el => {
+                    formData.append('product_image[]', el);
+                })
+
+            axios.post('/product', formData).then(response => {
                 console.log(response.data);
             }).catch(error => {
                 console.log(error);

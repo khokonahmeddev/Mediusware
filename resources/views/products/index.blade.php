@@ -67,14 +67,19 @@
                             <td>{{++$key}}</td>
                             <td>{{$product->title}} <br> Created at
                                 : {{\Carbon\Carbon::parse($product['created_at'])->format('d-M-Y')}}</td>
-                            <td></td>
+                            <td>{{$product->description}}</td>
                             <td>
                                 <dl class="row mb-0" style="height: 80px; overflow: hidden" id="variant">
 
                                     <dt class="col-sm-3 pb-0">
-                                        @if($product->productVariants)
-                                            @foreach($product->productVariants as $variant)
-                                                {{$variant->variant .'/'}}
+                                        @if($product->productVariantPrice)
+                                            @foreach($product->productVariantPrice as $variant)
+                                                @if($variant->variantNameOne || $variant->variantNameTwo || $variant->variantNameThree)
+                                                    {{@$variant->variantNameOne->variant .' /'}}
+                                                    {{@$variant->variantNameTwo->variant .' /'}}
+                                                    {{@$variant->variantNameThree->variant}}
+                                                    <br>
+                                                @endif
                                             @endforeach
                                         @endif
                                         {{--                                        SM/ Red/ V-Nick--}}
