@@ -6,18 +6,35 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantPrice;
 use App\Models\Variant;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Contracts\Foundation\Application|\Illuminate\Contracts\View\Factory|\Illuminate\Http\Response|\Illuminate\View\View
-     */
+    protected $variant;
+    
     public function index()
     {
-        return view('products.index');
+        $products = Product::with('productVariants', 'productVariantPrice')
+            ->when(request()->get('title'), function (Builder $builder) {
+                $builder->where('title', 'LIKE', '%' . request()->get('title') . '%');
+            })->when(request()->get('variant'), function (Builder $builder) {
+                $builder->whereHas('productVariants', function (Builder $builder) {
+                    $builder->where('variant', 'LIKE', '%' . request()->get('variant') . '%');
+                });
+            })->when(request()->get('price_from'), function (Builder $builder) {
+                $builder->whereHas('productVariantPrice', function (Builder $builder) {
+                    $builder->whereBetween('price', [request()->get('price_from'), request()->get('price_to')]);
+                });
+            })->when(request()->get('date'), function (Builder $builder) {
+                $builder->whereDate('created_at', '=', Carbon::parse(request()->get('date'))->format('Y-m-d'));
+            })->paginate(5);
+
+        $variantItems = Variant::with('productVariants')->get();
+        $groups = $variantItems->groupBy('title');
+
+        return view('products.index', compact('products', 'variantItems', 'groups'));
     }
 
     /**
@@ -31,24 +48,43 @@ class ProductController extends Controller
         return view('products.create', compact('variants'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
+
     public function store(Request $request)
     {
+        $request->validate([
+            'title' => 'required|unique:products,title|max:255',
+            'sku' => 'required|unique:products,sku|max:255',
+        ]);
+
+        $product = Product::create($request->only('title', 'sku', 'description'));
+        if ($request->product_variant) {
+            foreach ($request->product_variant as $key => $items) {
+                foreach ($items['tags'] as $tag) {
+                    $this->variant = $product->productVariants()->updateOrCreate([
+                        'variant' => $tag,
+                        'variant_id' => $items['option'],
+                    ]);
+                }
+
+                foreach ($request->product_variant_prices as $item) {
+                    $product->productVariantPrice()->updateOrCreate([
+                        'product_variant_one' => $this->variant->id,
+                        'product_variant_two' => $this->variant->id,
+                        'product_variant_three' => $this->variant->id,
+                        'price' => $item['price'],
+                        'stock' => $item['stock'],
+                    ]);
+                }
+
+            }
+
+
+        }
+        return redirect()->back()->with('message', 'Product created successfully');
 
     }
 
 
-    /**
-     * Display the specified resource.
-     *
-     * @param \App\Models\Product $product
-     * @return \Illuminate\Http\Response
-     */
     public function show($product)
     {
 
