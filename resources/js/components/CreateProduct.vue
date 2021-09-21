@@ -114,6 +114,10 @@ export default {
         variants: {
             type: Array,
             required: true
+        },
+        productEdit: {
+            type: Object,
+            required: false
         }
     },
     data() {
@@ -194,23 +198,60 @@ export default {
 
             let formData = formDataAssigner(new FormData, product);
 
-            if (this.$refs.myVueDropzone.getQueuedFiles().length)
+            if (this.$refs.myVueDropzone.getQueuedFiles().length) {
                 this.$refs.myVueDropzone.getQueuedFiles().forEach(el => {
                     formData.append('product_image[]', el);
                 })
+            }
 
-            axios.post('/product', formData).then(response => {
-                console.log(response.data);
-            }).catch(error => {
-                console.log(error);
-            })
+            if (this.productEdit) {
+                formData.append('_method', 'patch');
+                axios.post('/product/' + this.productEdit.id, formData).then(response => {
+                    location.reload();
+                }).catch(error => {
+                    console.log(error);
+                })
+            } else {
+                axios.post('/product', formData).then(response => {
+                    window.location.replace('/product')
+                }).catch(error => {
+                    console.log(error);
+                })
+            }
 
-            console.log(product);
         }
 
 
     },
     mounted() {
+        if (this.productEdit) {
+            this.product_variant = [];
+            this.product_name = this.productEdit.title
+            this.product_sku = this.productEdit.sku
+            this.description = this.productEdit.description
+
+            this.productEdit.images.forEach((item, index) => {
+                let file = {size: 123, name: `${this.product_name}-${index + 1}`, type: "image/png"},
+                    url = `/${item.file_path}`;
+                this.$refs.myVueDropzone.manuallyAddFile(file, url);
+            });
+
+            this.variants.forEach((item) => {
+                let variant = this.productEdit['product_variants'].filter(varId => varId.variant_id == item.id);
+                if (variant.length) {
+                    let productVarient = {
+                        option: item.id,
+                        tags: variant.map(element => element.variant)
+                    }
+                    this.product_variant.push(productVarient);
+                }
+            });
+            this.checkVariant();
+            for (let i = 0; i < this.product_variant_prices.length; i++) {
+                this.product_variant_prices[i].price = this.productEdit['product_variant_price'][i].price;
+                this.product_variant_prices[i].stock = this.productEdit['product_variant_price'][i].stock;
+            }
+        }
         console.log('Component mounted.')
     }
 }

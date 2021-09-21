@@ -11,8 +11,6 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    protected $product;
-
     public function index()
     {
         $products = Product::with('productVariants', 'productVariantPrice')
@@ -54,20 +52,18 @@ class ProductController extends Controller
             'title' => 'required|unique:products,title|max:255',
             'sku' => 'required|unique:products,sku|max:255',
         ]);
-        $this->product = Product::create($request->only('title', 'sku', 'description'));
+        $product = Product::create($request->only('title', 'sku', 'description'));
 
         if ($request->hasfile('product_image')) {
-            $this->uploadImage($request->file('product_image'));
-
+            $this->uploadImage($request->file('product_image'), $product);
         }
         if ($request->product_variant) {
-            $this->productVariant($request->product_variant);
+            $this->productVariant($request->product_variant, $product);
         }
 
         if ($request->product_variant_prices) {
-            $this->productVariantPrice($request->product_variant_prices);
+            $this->productVariantPrice($request->product_variant_prices, $product);
         }
-
 
         return "Product created successfully";
 
@@ -87,8 +83,11 @@ class ProductController extends Controller
      */
     public function edit(Product $product)
     {
+        $productEdit = $product->load(['images', 'productVariants', 'productVariantPrice' => function ($query) {
+            $query->with('variantNameOne', 'variantNameTwo', 'variantNameThree');
+        }]);
         $variants = Variant::all();
-        return view('products.edit', compact('variants'));
+        return view('products.edit', compact('variants', 'productEdit'));
     }
 
     /**
@@ -100,7 +99,24 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product)
     {
-        //
+
+        $product->update($request->only('title', 'sku', 'description'));
+
+        if ($request->hasfile('product_image')) {
+            $this->uploadImage($request->file('product_image'), $product);
+        }
+
+        if ($request->product_variant) {
+            $product->productVariants()->delete();
+            $this->productVariant($request->product_variant, $product);
+        }
+
+        if ($request->product_variant_prices) {
+            $product->productVariantPrice()->delete();
+            $this->productVariantPrice($request->product_variant_prices, $product);
+        }
+
+        return "Product updated successfully";
     }
 
     /**
@@ -114,25 +130,25 @@ class ProductController extends Controller
         //
     }
 
-    public function uploadImage($request)
+    public function uploadImage($request, $product)
     {
         foreach ($request as $image) {
             $extension = uniqid() . '.' . $image->getClientOriginalExtension();
             $filePath = 'images/';
             $image->move(public_path($filePath), $extension);
             $imagePath = $filePath . $extension;
-            $this->product->images()->updateOrCreate([
+            $product->images()->updateOrCreate([
                 'file_path' => $imagePath
             ]);
         }
     }
 
-    public function productVariant($request)
+    public function productVariant($request, $product)
     {
         foreach ($request as $items) {
             $tags = explode(",", $items['tags']);
             foreach ($tags as $tag) {
-                $this->product->productVariants()->updateOrCreate([
+                $product->productVariants()->updateOrCreate([
                     'variant' => $tag,
                     'variant_id' => $items['option'],
                 ]);
@@ -140,9 +156,9 @@ class ProductController extends Controller
         }
     }
 
-    public function productVariantPrice($request)
+    public function productVariantPrice($request, $product)
     {
-        $variants = $this->product->load('productVariants')->productVariants->pluck('id', 'variant');
+        $variants = $product->load('productVariants')->productVariants->pluck('id', 'variant');
         foreach ($request as $item) {
             $titles = explode('/', $item['title']);
             $productVariants = [];
@@ -152,7 +168,7 @@ class ProductController extends Controller
                     $productVariants["product_variant_$value"] = $variants[$id];
                 }
             }
-            $this->product->productVariantPrice()->updateOrCreate(array_merge($productVariants, [
+            $product->productVariantPrice()->updateOrCreate(array_merge($productVariants, [
                 'price' => $item['price'],
                 'stock' => $item['stock'],
             ]));
